@@ -47,9 +47,9 @@ struct orienParam {
 	double f = 0;
 	//畸变系数
 	double k1 = 0;
-	//double k2 = 0;
-	//double p1 = 0;
-	//double p2 = 0;
+	double k2 = 0;
+	double p1 = 0;
+	double p2 = 0;
 	//外方位元素
 	double Phi = 0;
 	double Omega = 0;
@@ -57,6 +57,10 @@ struct orienParam {
 	double Xs = 0;
 	double Ys = 0;
 	double Zs = 0;
+	//比例尺不一系数
+	double dp = 0;
+	double ds = 0;
+
 };
 
 void readClptData(char* file, vector<ControlPoint>& ControlPoints)
@@ -146,21 +150,30 @@ Mat cal_L_RoughValue(vector<PointPair> selectedPairs)
 		A.at<double>(i * 2, 0) = selectedPairs[i].X;
 		A.at<double>(i * 2, 1) = selectedPairs[i].Y;
 		A.at<double>(i * 2, 2) = selectedPairs[i].Z;
-		A.at<double>(i * 2, 3) = 1;
+		A.at<double>(i * 2, 3) = 1.0;
+		A.at<double>(i * 2, 4) = 0.0;
+		A.at<double>(i * 2, 5) = 0.0;
+		A.at<double>(i * 2, 6) = 0.0;
+		A.at<double>(i * 2, 7) = 0.0;
 		A.at<double>(i * 2, 8) = selectedPairs[i].x * selectedPairs[i].X;
 		A.at<double>(i * 2, 9) = selectedPairs[i].x * selectedPairs[i].Y;
 		A.at<double>(i * 2, 10) = selectedPairs[i].x * selectedPairs[i].Z;
+		A.at<double>(i * 2 + 1, 0) = 0.0;
+		A.at<double>(i * 2 + 1, 1) = 0.0;
+		A.at<double>(i * 2 + 1, 2) = 0.0;
+		A.at<double>(i * 2 + 1, 3) = 0.0;
 		A.at<double>(i * 2 + 1, 4) = selectedPairs[i].X;
 		A.at<double>(i * 2 + 1, 5) = selectedPairs[i].Y;
 		A.at<double>(i * 2 + 1, 6) = selectedPairs[i].Z;
-		A.at<double>(i * 2 + 1, 7) = 1;
+		A.at<double>(i * 2 + 1, 7) = 1.0;
 		A.at<double>(i * 2 + 1, 8) = selectedPairs[i].y * selectedPairs[i].X;
 		A.at<double>(i * 2 + 1, 9) = selectedPairs[i].y * selectedPairs[i].Y;
 		A.at<double>(i * 2 + 1, 10) = selectedPairs[i].y * selectedPairs[i].Z;
-
-		C.at<double>(i * 2 + 1, 0) = selectedPairs[i].y;
+		
 		C.at<double>(i * 2, 0) = selectedPairs[i].x;
+		C.at<double>(i * 2 + 1, 0) = selectedPairs[i].y;
 	}
+	//cout << A << endl;
 	//求解
 	Li = (A.t() * A).inv() * A.t() * C;
 	return Li;
@@ -183,6 +196,12 @@ void cal_InteriorParams(Mat Li, orienParam& orien)
 	double B = (l5 * l5 + l6 * l6 + l7 * l7) / (l9 * l9 + l10 * l10 + l11 * l11) - orien.y0 * orien.y0;
 	double C = (l1 * l5 + l2 * l6 + l3 * l7) / (l9 * l9 + l10 * l10 + l11 * l11) - orien.x0 * orien.y0;
 	orien.f = sqrt((A * B - C * C) / B);
+	double dp = asin(sqrt(C * C / (A * B)));
+	if (dp * C > 0)
+	{
+		orien.dp = -1.0 * dp;
+	}
+	orien.ds = sqrt(A / B) - 1;
 }
 
 Mat cal_unpt_RoughValue(imgPoint left_pair, imgPoint right_pair, Mat left_Li, Mat right_Li)
@@ -213,7 +232,7 @@ Mat cal_unpt_RoughValue(imgPoint left_pair, imgPoint right_pair, Mat left_Li, Ma
 	return unpt_RoughValue;
 }
 
-void cal_L_AccurateValue(Mat Li, Mat& A, Mat& l, orienParam orien, vector<PointPair> pairs)
+void cal_L_AccurateValue(Mat Li, Mat& A, Mat& l, orienParam& orien, vector<PointPair> pairs)
 {
 	double l1 = Li.at<double>(0, 0);
 	double l2 = Li.at<double>(1, 0);
@@ -240,10 +259,22 @@ void cal_L_AccurateValue(Mat Li, Mat& A, Mat& l, orienParam orien, vector<PointP
 		A.at<double>(2 * i, 1) = -1.0 * Y / a;
 		A.at<double>(2 * i, 2) = -1.0 * Z / a;
 		A.at<double>(2 * i, 3) = -1.0 * 1 / a;
+		A.at<double>(2 * i, 4) = 0;
+		A.at<double>(2 * i, 5) = 0;
+		A.at<double>(2 * i, 6) = 0;
+		A.at<double>(2 * i, 7) = 0;
 		A.at<double>(2 * i, 8) = -1.0 * x * X / a;
 		A.at<double>(2 * i, 9) = -1.0 * x * Y / a;
 		A.at<double>(2 * i, 10) = -1.0 * x * Z / a;
 		A.at<double>(2 * i, 11) = -1.0 * (x - x0) * r_2;
+		A.at<double>(2 * i, 12) = -1.0 * (x - x0) * r_2 * r_2;
+		A.at<double>(2 * i, 13) = -1.0 * (r_2 + 2 * (x - x0) * (x - x0));
+		A.at<double>(2 * i, 14) = -2.0 * (x - x0) * (y - y0);
+
+		A.at<double>(2 * i + 1, 0) = 0.0;
+		A.at<double>(2 * i + 1, 1) = 0.0;
+		A.at<double>(2 * i + 1, 2) = 0.0;
+		A.at<double>(2 * i + 1, 3) = 0.0;
 		A.at<double>(2 * i + 1, 4) = -1.0 * X / a;
 		A.at<double>(2 * i + 1, 5) = -1.0 * Y / a;
 		A.at<double>(2 * i + 1, 6) = -1.0 * Z / a;
@@ -252,13 +283,16 @@ void cal_L_AccurateValue(Mat Li, Mat& A, Mat& l, orienParam orien, vector<PointP
 		A.at<double>(2 * i + 1, 9) = -1.0 * y * Y / a;
 		A.at<double>(2 * i + 1, 10) = -1.0 * y * Z / a;
 		A.at<double>(2 * i + 1, 11) = -1.0 * (y - y0) * r_2;
+		A.at<double>(2 * i + 1, 12) = -1.0 * (y - y0) * r_2 * r_2;
+		A.at<double>(2 * i + 1, 13) = -2.0 * (y - y0) * (x - x0);
+		A.at<double>(2 * i + 1, 14) = -1.0 * (r_2 + 2 * (y - y0) * (y - y0));
 
 		l.at<double>(2 * i, 0) = x / a;
 		l.at<double>(2 * i + 1, 0) = y / a;
 	}
 }
 
-void modifyImgPoints(vector<PointPair>& PointPairs, orienParam orien)
+void modifyImgPoints(vector<imgPoint>& PointPairs, orienParam orien)
 {
 	for (int i = 0; i < PointPairs.size(); i++)
 	{
@@ -267,9 +301,13 @@ void modifyImgPoints(vector<PointPair>& PointPairs, orienParam orien)
 		double x0 = orien.x0;
 		double y0 = orien.y0;
 		double k1 = orien.k1;
+		double k2 = orien.k2;
+		double p1 = orien.p1;
+		double p2 = orien.p2;
 		double r_2 = (x - x0) * (x - x0) + (y - y0) * (y - y0);
-		PointPairs[i].x = x + k1 * (x - x0) * r_2;
-		PointPairs[i].y = y + k1 * (y - y0) * r_2;
+		PointPairs[i].x = x + (x - x0) * (k1 * r_2 + k2 * r_2 * r_2) + p1 * (r_2 + 2 * (x - x0) * (x - x0)) + 2 * p2 * (x - x0) * (y - y0);
+		PointPairs[i].y = y + (y - y0) * (k1 * r_2 + k2 * r_2 * r_2) + p2 * (r_2 + 2 * (y - y0) * (y - y0)) + 2 * p1 * (x - x0) * (y - y0);
+	
 	}
 }
 
@@ -306,6 +344,24 @@ void cal_ExteriorParams(Mat AcLi, orienParam& orien, vector<PointPair> pairs)
 	orien.Xs = X.at<double>(0, 0);
 	orien.Ys = X.at<double>(1, 0);
 	orien.Zs = X.at<double>(2, 0);
+
+	double factor = sqrt(l9 * l9 + l10 * l10 + l11 * l11);
+	double a3 = l9 / factor;
+	double b3 = l10 / factor;
+	double c3 = l11 / factor;
+
+	double x0 = orien.x0;
+	double y0 = orien.y0;
+	double f = orien.f;
+	double ds = orien.ds;
+	double dp = orien.dp;
+	double b1 = (l2 / factor + b3 * x0 + (y0 * b3 + l6) * (1 + ds) * sin(dp)) / f;
+	double b2 = (l6 / factor + b3 * y0) * (1 + ds) * cos(dp) / f;
+
+	orien.Phi = atan(-1.0 * a3 / c3);
+	orien.Omega = asin(-1.0 * b3);
+	orien.Kappa = atan(b1 / b2);
+
 }
 
 
@@ -430,93 +486,180 @@ int main()
 	//}
 
 	//解算l系数初值
-	int l_selected[6] = { 214, 337 ,142 ,500, 132 ,354 };
 	Mat left_L_RoughValue = cal_L_RoughValue(left_PointPairs);
-	int r_selected[6] = { 214, 136 ,326 ,156, 132 ,450 };
 	Mat right_L_RoughValue = cal_L_RoughValue(right_PointPairs);
-	cout << "l系数初值：" << endl;
-	cout << left_L_RoughValue << endl;
-	cout << right_L_RoughValue << endl;
+	cout << "左片Li系数初值：" << endl;
+	//遍历输出
+	for (int i = 0; i < left_L_RoughValue.rows; i++)
+	{
+		cout << "L" << i + 1 << "\t" << left_L_RoughValue.at<double>(i, 0) << " " << endl;
+	}
+	cout << "----------------------------------" << endl;
+	cout << "右片Li系数初值：" << endl;
+	for (int i = 0; i < right_L_RoughValue.rows; i++)
+	{
+		cout << "L" << i + 1 << "\t" << right_L_RoughValue.at<double>(i, 0) << " " << endl;
+	}
 
 	//解算内方位元素初值 --> 计算l精确值要用
-	orienParam left_orien; left_orien.x0 = 0; left_orien.y0 = 0; left_orien.f = 28;
+	orienParam left_orien; left_orien.x0 = 0; left_orien.y0 = 0; left_orien.f = 0;
 	left_orien.Xs = 0; left_orien.Ys = 0; left_orien.Zs = 0;
 	left_orien.Kappa = 0; left_orien.Omega = 0; left_orien.Phi = 0;
-	left_orien.k1 = 0; /*left_orien.k2 = 0; left_orien.p1 = 0; left_orien.p2 = 0;*/
+	left_orien.k1 = 0; left_orien.k2 = 0; left_orien.p1 = 0; left_orien.p2 = 0;
 	orienParam right_orien;
 	right_orien.x0 = 0; right_orien.y0 = 0; right_orien.f = 0;
 	right_orien.Xs = 0; right_orien.Ys = 0; right_orien.Zs = 0;
 	right_orien.Kappa = 0; right_orien.Omega = 0; right_orien.Phi = 0;
-	right_orien.k1 = 0; /* right_orien.k2 = 0; right_orien.p1 = 0; right_orien.p2 = 0;*/
+	right_orien.k1 = 0;  right_orien.k2 = 0; right_orien.p1 = 0; right_orien.p2 = 0;
 	double left_x0 = 0.0; double left_y0 = 0.0; double left_f = 0.0;
 	double right_x0 = 0.0; double right_y0 = 0.0; double right_f = 0.0;
 	cal_InteriorParams(left_L_RoughValue, left_orien);
 	cal_InteriorParams(right_L_RoughValue, right_orien);
 
-	//解算左片未知点的坐标初值
-	vector<ControlPoint> unPoints;
-	for (int i = 0; i < left_unPoints.size(); i++)
-	{
-		Mat un_res = cal_unpt_RoughValue(left_unPoints[i], right_unPoints[i], left_L_RoughValue, right_L_RoughValue);
-		ControlPoint p;
-		p.flag = left_unPoints[i].flag;
-		p.X = un_res.at<double>(0, 0);
-		p.Y = un_res.at<double>(1, 0);
-		p.Z = un_res.at<double>(2, 0);
-		unPoints.push_back(p);
-		cout << p.flag << " " << p.X << " " << p.Y << " " << p.Z << endl;
-	}
-
 	//解算l系数精确值
-	Mat left_A = Mat::zeros(2 * left_PointPairs.size(), 12, CV_64FC1);
+	Mat left_A = Mat::zeros(2 * left_PointPairs.size(), 15, CV_64FC1);
 	Mat left_l = Mat::zeros(2 * left_PointPairs.size(), 1, CV_64FC1);
-	Mat right_A = Mat::zeros(2 * right_PointPairs.size(), 12, CV_64FC1);
+	Mat right_A = Mat::zeros(2 * right_PointPairs.size(), 15, CV_64FC1);
 	Mat right_l = Mat::zeros(2 * right_PointPairs.size(), 1, CV_64FC1);
 	double former_left_f = left_orien.f;
 	double former_right_f = right_orien.f;
+	double former_left_x0 = left_orien.x0;
+	double former_left_y0 = left_orien.y0;
 	Mat left_L_AccurateValue;
 	Mat right_L_AccurateValue;
 	while (true)
 	{
 		cal_L_AccurateValue(left_L_RoughValue, left_A, left_l, left_orien, left_PointPairs);
 		left_L_AccurateValue = (left_A.t() * left_A).inv() * left_A.t() * left_l;
+		left_orien.k1 = left_L_AccurateValue.at<double>(11, 0);
+		left_orien.k2 = left_L_AccurateValue.at<double>(12, 0);
+		left_orien.p1 = left_L_AccurateValue.at<double>(13, 0);
+		left_orien.p2 = left_L_AccurateValue.at<double>(14, 0);
+		//tmd没给初始值更新赋值，找了那么久
+		left_L_RoughValue.at<double>(0, 0) = left_L_AccurateValue.at<double>(0, 0);
+		left_L_RoughValue.at<double>(1, 0) = left_L_AccurateValue.at<double>(1, 0);
+		left_L_RoughValue.at<double>(2, 0) = left_L_AccurateValue.at<double>(2, 0);
+		left_L_RoughValue.at<double>(3, 0) = left_L_AccurateValue.at<double>(3, 0);
+		left_L_RoughValue.at<double>(4, 0) = left_L_AccurateValue.at<double>(4, 0);
+		left_L_RoughValue.at<double>(5, 0) = left_L_AccurateValue.at<double>(5, 0);
+		left_L_RoughValue.at<double>(6, 0) = left_L_AccurateValue.at<double>(6, 0);
+		left_L_RoughValue.at<double>(7, 0) = left_L_AccurateValue.at<double>(7, 0);
+		left_L_RoughValue.at<double>(8, 0) = left_L_AccurateValue.at<double>(8, 0);
+		left_L_RoughValue.at<double>(9, 0) = left_L_AccurateValue.at<double>(9, 0);
+		left_L_RoughValue.at<double>(10, 0) = left_L_AccurateValue.at<double>(10, 0);
 		cal_InteriorParams(left_L_AccurateValue, left_orien);
-		if (abs(left_orien.f - former_left_f) < 0.01)
+		if (abs(left_orien.f - former_left_f) < 0.001 && abs(left_orien.x0-former_left_x0<0.001) && abs(left_orien.y0 - former_left_y0 < 0.001))
+		{
+			//精度统计
+			Mat V = left_A * left_L_AccurateValue - left_l;
+			Mat sigma0 = (V.t() * V / (2 * left_PointPairs.size() - 15));
+			cout << "------------------------------" << endl;
+			cout << "左片像点坐标观测值的单位权中误差/mm：" << sigma0.at<double>(0, 0) << endl;
+			cout << "------------------------------" << endl;
+			int num = 0;
+			cout << "左片像点坐标观测值的残差/mm：" << endl;
+			cout << "点号" << "\t" << "Vx" << "\t\t" << "Vy" << endl;
+
+			for (int i = 0; i < V.rows; i += 2)
+			{
+				cout << left_PointPairs[num].flag << scientific <<"\t" << V.at<double>(i, 0) << "\t" << V.at<double>(i + 1, 0) << endl;
+				num++;
+			}
+			cout.unsetf(ios::scientific);
+			cout << "------------------------------" << endl;
+			cout << "左片Li精确值为：" << endl;
+			for (int k = 0; k < left_L_AccurateValue.rows - 4; k++)
+				cout << "L" << k + 1 << "\t" << left_L_AccurateValue.at<double>(k, 0) << endl;
 			break;
+		}
 		former_left_f = left_orien.f;
+		former_left_x0 = left_orien.x0;
+		former_left_y0 = left_orien.y0;
 	}
 	while (true)
 	{
 		cal_L_AccurateValue(right_L_RoughValue, right_A, right_l, right_orien, right_PointPairs);
 		right_L_AccurateValue = (right_A.t() * right_A).inv() * right_A.t() * right_l;
+		right_orien.k1 = right_L_AccurateValue.at<double>(11, 0);
+		right_orien.k2 = right_L_AccurateValue.at<double>(12, 0);
+		right_orien.p1 = right_L_AccurateValue.at<double>(13, 0);
+		right_orien.p2 = right_L_AccurateValue.at<double>(14, 0);
+		//tmd没给初始值更新赋值，找了那么久
+		right_L_RoughValue.at<double>(0, 0) = right_L_AccurateValue.at<double>(0, 0);
+		right_L_RoughValue.at<double>(1, 0) = right_L_AccurateValue.at<double>(1, 0);
+		right_L_RoughValue.at<double>(2, 0) = right_L_AccurateValue.at<double>(2, 0);
+		right_L_RoughValue.at<double>(3, 0) = right_L_AccurateValue.at<double>(3, 0);
+		right_L_RoughValue.at<double>(4, 0) = right_L_AccurateValue.at<double>(4, 0);
+		right_L_RoughValue.at<double>(5, 0) = right_L_AccurateValue.at<double>(5, 0);
+		right_L_RoughValue.at<double>(6, 0) = right_L_AccurateValue.at<double>(6, 0);
+		right_L_RoughValue.at<double>(7, 0) = right_L_AccurateValue.at<double>(7, 0);
+		right_L_RoughValue.at<double>(8, 0) = right_L_AccurateValue.at<double>(8, 0);
+		right_L_RoughValue.at<double>(9, 0) = right_L_AccurateValue.at<double>(9, 0);
+		right_L_RoughValue.at<double>(10, 0) = right_L_AccurateValue.at<double>(10, 0);
 		cal_InteriorParams(right_L_AccurateValue, right_orien);
 		if (abs(right_orien.f - former_right_f) < 0.01)
+		{
+			//精度统计
+			Mat V = right_A * right_L_AccurateValue - right_l;
+			Mat sigma0 = (V.t() * V / (2 * right_PointPairs.size() - 15));
+			cout << "------------------------------" << endl;
+			cout << "右片像点坐标观测值的单位权中误差/mm：" << sigma0.at<double>(0, 0) << endl;
+			cout << "------------------------------" << endl;
+			int num = 0;
+			cout << "右片像点坐标观测值的残差/mm：" << endl;
+			cout << "点号" << "\t" << "Vx" << "\t\t" << "Vy" << endl;
+			for (int i = 0; i < V.rows; i += 2)
+			{
+				cout << right_PointPairs[num].flag << scientific << "\t" << V.at<double>(i, 0) << "\t" << V.at<double>(i + 1, 0) << endl;
+				num++;
+			}
+			cout.unsetf(ios::scientific);
+			cout << "------------------------------" << endl;
+			cout << "右片Li精确值为：" << endl;
+			for (int k = 0; k < right_L_AccurateValue.rows - 4; k++)
+				cout << "L" << k + 1 << "\t" << right_L_AccurateValue.at<double>(k, 0) << endl;
 			break;
+		}
 		former_right_f = right_orien.f;
 	}
-
-	cout << "l系数精确值：" << endl;
-	cout << left_L_AccurateValue << endl;
-	cout << right_L_AccurateValue << endl;
 
 	//算一下外方位元素看看结果
 	cal_ExteriorParams(left_L_AccurateValue, left_orien, left_PointPairs);
 	cal_ExteriorParams(right_L_AccurateValue, right_orien, right_PointPairs);
-	cout << "左相机外方位元素：" << endl;
+	cout << "------------------------------" << endl;
+	cout << "左相机内外方位元素：" << endl;
 	cout << "Xs:" << left_orien.Xs << " Ys:" << left_orien.Ys << " Zs:" << left_orien.Zs << endl;
-	cout << "右相机外方位元素"<< endl;
+	cout << "Phi:" << left_orien.Phi << " Omega:" << left_orien.Omega << " Kappa:" << left_orien.Kappa << endl;
+	cout << "x0:" << left_orien.x0 << " y0:" << left_orien.y0 << " f:" << left_orien.f << endl;
+	cout << "------------------------------" << endl;
+	cout << "右相机内外方位元素"<< endl;
 	cout << "Xs:" << right_orien.Xs << " Ys:" << right_orien.Ys << " Zs:" << right_orien.Zs << endl;
+	cout << "Phi" << right_orien.Phi << " Omega:" << right_orien.Omega << " Kappa:" << right_orien.Kappa << endl;
+	cout << "x0:" << right_orien.x0 << " y0:" << right_orien.y0 << " f:" << right_orien.f << endl;
 
 	//解算控制点物方空间坐标精确值
 	//先改正像点坐标 --> 内方位元素的精确值已经在上一步用Li的精确值更新了
-	modifyImgPoints(left_PointPairs, left_orien);
-	modifyImgPoints(right_PointPairs, right_orien);
-	////输出看看
-	//for (int i = 0; i < left_PointPairs.size(); i++)
-	//{
-	//	cout << left_PointPairs[i].flag <<" " << left_PointPairs[i].x << " " << left_PointPairs[i].y << endl;
-	//}
+	/*for (int i = 0; i < left_unPoints.size(); i++)
+		cout << left_unPoints[i].flag << " " << left_unPoints[i].x << " " << left_unPoints[i].y << endl;*/
+	modifyImgPoints(left_unPoints, left_orien);
+	modifyImgPoints(right_unPoints, right_orien);
+	//for (int i = 0; i < left_unPoints.size(); i++)
+	//	cout << left_unPoints[i].flag << " " << left_unPoints[i].x << " " << left_unPoints[i].y << endl;
 	
+
+	//解算未知点的坐标初值
+	vector<ControlPoint> unPoints;
+	for (int i = 0; i < left_unPoints.size(); i++)
+	{
+		Mat un_res = cal_unpt_RoughValue(left_unPoints[i], right_unPoints[i], left_L_AccurateValue, right_L_AccurateValue);
+		ControlPoint p;
+		p.flag = left_unPoints[i].flag;
+		p.X = un_res.at<double>(0, 0);
+		p.Y = un_res.at<double>(1, 0);
+		p.Z = un_res.at<double>(2, 0);
+		unPoints.push_back(p);
+		//cout << p.flag << " " << p.X << " " << p.Y << " " << p.Z << endl;
+	}
 	//解算待定点物方空间坐标精确值
 	for (int i = 0; i < left_unPoints.size(); i++)
 	{
@@ -524,14 +667,38 @@ int main()
 		unPoints[i] = cal_unpt_AccurateValue(left_L_AccurateValue, right_L_AccurateValue, unPoints[i], left_unPoints[i], right_unPoints[i], left_orien, right_orien);
 		//cout << left_unPoints[i].flag << " " << unPoints[i].X << " " << unPoints[i].Y << " " << unPoints[i].Z << endl;
 	}
+	//计算各点相对于点52的欧式距离
+	ControlPoint p52;
+	for (int i = 0; i < unPoints.size(); i++)
+	{
+		if (unPoints[i].flag == 52)
+		{
+			p52 = unPoints[i];
+			break;
+		}
+	}
+	vector<double> distance;
+	cout << "------------------------------" << endl;
+	cout << "待定点相对于点52的欧式距离/mm：" << endl;
+	for (int i = 0; i < unPoints.size(); i++)
+	{
+		if(unPoints[i].flag == 52)
+			continue;
+		double dis = sqrt(pow(unPoints[i].X - p52.X, 2) + pow(unPoints[i].Y - p52.Y, 2) + pow(unPoints[i].Z - p52.Z, 2));
+		distance.push_back(dis);
+		cout << unPoints[i].flag << " " << dis << endl;
+	}
 
 	//解算检查点物方空间坐标初始值
+	//先改正像点坐标 --> 内方位元素的精确值已经在上一步用Li的精确值更新了
+	modifyImgPoints(left_ckpts, left_orien);
+	modifyImgPoints(right_ckpts, right_orien);
 	vector<ControlPoint> ckPoints;
 	for (int i = 0; i < left_ckpts.size(); i++)
 	{
 		Mat ck_res = cal_unpt_RoughValue(left_ckpts[i], right_ckpts[i], left_L_RoughValue, right_L_RoughValue);
 		ControlPoint p;
-		p.flag = left_unPoints[i].flag;
+		p.flag = left_ckpts[i].flag;
 		p.X = ck_res.at<double>(0, 0);
 		p.Y = ck_res.at<double>(1, 0);
 		p.Z = ck_res.at<double>(2, 0);
@@ -541,9 +708,25 @@ int main()
 	//解算检查点物方空间坐标精确值
 	for (int i = 0; i < left_ckpts.size(); i++)
 	{
-		cout << left_ckpts[i].flag << " " << ckPoints[i].X << " " << ckPoints[i].Y << " " << ckPoints[i].Z << endl;
+		//cout << left_ckpts[i].flag << " " << ckPoints[i].X << " " << ckPoints[i].Y << " " << ckPoints[i].Z << endl;
 		ckPoints[i] = cal_unpt_AccurateValue(left_L_AccurateValue, right_L_AccurateValue, ckPoints[i], left_ckpts[i], right_ckpts[i], left_orien, right_orien);
-		cout << left_ckpts[i].flag << " " << ckPoints[i].X << " " << ckPoints[i].Y << " " << ckPoints[i].Z << endl;
+		//cout << left_ckpts[i].flag << " " << ckPoints[i].X << " " << ckPoints[i].Y << " " << ckPoints[i].Z << endl;
+	}
+	cout << "-------------------" << endl;
+	cout << "检查点物方空间坐标残差/mm" << endl;
+	cout << "点号\t" << "X\t" << "Y\t" << "Z\t" << endl;
+	for (int i = 0; i < left_ckpt_Pairs.size(); i++)
+	{
+		for (int j = 0; j < ckPoints.size(); j++)
+		{
+			if (left_ckpt_Pairs[i].flag == ckPoints[j].flag)
+			{
+				double dx = left_ckpt_Pairs[i].X - ckPoints[j].X;
+				double dy = left_ckpt_Pairs[i].Y - ckPoints[j].Y;
+				double dz = left_ckpt_Pairs[i].Z - ckPoints[j].Z;
+				cout << left_ckpt_Pairs[i].flag << "\t" << dx << "\t" << dy << "\t" << dz << endl;
+			}
+		}
 	}
 	return 0;
 }
