@@ -197,11 +197,13 @@ void cal_InteriorParams(Mat Li, orienParam& orien)
 	double C = (l1 * l5 + l2 * l6 + l3 * l7) / (l9 * l9 + l10 * l10 + l11 * l11) - orien.x0 * orien.y0;
 	orien.f = sqrt((A * B - C * C) / B);
 	double dp = asin(sqrt(C * C / (A * B)));
+	orien.ds = sqrt(A / B) - 1;
 	if (dp * C > 0)
 	{
 		orien.dp = -1.0 * dp;
+		return;
 	}
-	orien.ds = sqrt(A / B) - 1;
+	orien.dp = dp;
 }
 
 Mat cal_unpt_RoughValue(imgPoint left_pair, imgPoint right_pair, Mat left_Li, Mat right_Li)
@@ -516,6 +518,7 @@ int main()
 	cal_InteriorParams(left_L_RoughValue, left_orien);
 	cal_InteriorParams(right_L_RoughValue, right_orien);
 
+
 	//解算l系数精确值
 	Mat left_A = Mat::zeros(2 * left_PointPairs.size(), 15, CV_64FC1);
 	Mat left_l = Mat::zeros(2 * left_PointPairs.size(), 1, CV_64FC1);
@@ -627,15 +630,19 @@ int main()
 	cal_ExteriorParams(left_L_AccurateValue, left_orien, left_PointPairs);
 	cal_ExteriorParams(right_L_AccurateValue, right_orien, right_PointPairs);
 	cout << "------------------------------" << endl;
-	cout << "左相机内外方位元素：" << endl;
+	cout << "左相机内外方位元素和畸变系数：" << endl;
 	cout << "Xs:" << left_orien.Xs << " Ys:" << left_orien.Ys << " Zs:" << left_orien.Zs << endl;
 	cout << "Phi:" << left_orien.Phi << " Omega:" << left_orien.Omega << " Kappa:" << left_orien.Kappa << endl;
 	cout << "x0:" << left_orien.x0 << " y0:" << left_orien.y0 << " f:" << left_orien.f << endl;
+	cout << "k1:" << left_orien.k1 << " k2:" << left_orien.k2 << " p1:" << left_orien.p1 << " p2:" << left_orien.p2 << endl;
+	cout << "ds: " << left_orien.ds << "dp: " << left_orien.dp << endl;
 	cout << "------------------------------" << endl;
-	cout << "右相机内外方位元素"<< endl;
+	cout << "右相机内外方位元素和畸变系数"<< endl;
 	cout << "Xs:" << right_orien.Xs << " Ys:" << right_orien.Ys << " Zs:" << right_orien.Zs << endl;
 	cout << "Phi" << right_orien.Phi << " Omega:" << right_orien.Omega << " Kappa:" << right_orien.Kappa << endl;
 	cout << "x0:" << right_orien.x0 << " y0:" << right_orien.y0 << " f:" << right_orien.f << endl;
+	cout << "k1:" << right_orien.k1 << " k2:" << right_orien.k2 << " p1:" << right_orien.p1 << " p2:" << right_orien.p2 << endl;
+	cout << "ds: " << right_orien.ds << "dp: " << right_orien.dp << endl;
 
 	//解算控制点物方空间坐标精确值
 	//先改正像点坐标 --> 内方位元素的精确值已经在上一步用Li的精确值更新了
